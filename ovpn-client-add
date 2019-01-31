@@ -1,0 +1,67 @@
+#!/bin/bash
+# This script generates .ovpn file for client
+
+# Specify client name as first argument
+ovpnclientname=$1
+# and client private (OpenVPN) IP address as second argument (optional)
+ovpnclientaddr=$2
+
+# Check if client name is empty
+if [ -z "$ovpnclientname" ]; then
+  # print message and exit
+  echo "No client name specified!"
+  echo "Usage: $0 client_name [fixed_private_ip]"
+  exit 1
+fi
+
+# include server configuration variables
+source ovpn-server-config
+
+# the variables below are set automatically
+ovpnconfigfile=/etc/openvpn/$ovpnservername.conf
+ovpnserverdir=/etc/openvpn/$ovpnservername
+
+
+# if our custom openvpn server configuration file does not exist
+if [ ! -f $ovpnconfigfile ]; then
+  # print message and exit
+  echo "OpenVPN server is NOT installed"
+  exit 1
+fi
+
+# save current directory for future use
+scriptdir=`pwd`
+
+# go to server CA directory to make new key for client
+cd $ovpnserverdir/ca
+
+# load default variables for CA certificates from "vars" file
+source ./vars
+
+# build client key
+echo "Building client key..."
+export EASY_RSA="${EASY_RSA:-.}"
+"$EASY_RSA/pkitool" $ovpnclientname
+
+cat ${ovpnserverdir}/client-config \
+    <(echo -e '\n<ca>') \
+    keys/ca.crt \
+    <(echo -e '</ca>\n<cert>') \
+    keys/${ovpnclientname}.crt \
+    <(echo -e '</cert>\n<key>') \
+    keys/${ovpnclientname}.key \
+    <(echo -e '</key>\n<tls-auth>') \
+    keys/ta.key \
+    <(echo -e '</tls-auth>') \
+    > ${scriptdir}/${ovpnclientname}.ovpn
+
+# If client private IP address specified
+if [ ! -z "$ovpnclientaddr" ]; then
+  # add ccd file to set this address as permanent for this client
+  cat <<EOF > ${ovpnserverdir}/ccd/${ovpnclientname}
+ifconfig-push ${ovpnclientaddr} ${ovpn_private_gw}
+EOF
+fi
+
+# Return to previous directory
+cd $scriptdir

@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# include server configuration variables
+source ovpn-server-config
+
+# the variables below are set automatically
+ovpnconfigfile=/etc/openvpn/$ovpnservername.conf
+ovpnserverdir=/etc/openvpn/$ovpnservername
+default_iface_name=`ip route | grep default | cut -d" " -f5`
+
+# save current directory for future use
+scriptdir=`pwd`
+
+systemctl stop openvpn@${ovpnservername}
+systemctl disable openvpn@${ovpnservername}
+
+rm -Rf $ovpnserverdir
+rm -f $ovpnconfigfile
+
+# allow incoming connections to OpenVPN
+ufw delete allow ${ovpn_server_port}/udp
+
+# allow traffic forwarding from OpenVPN clients network
+ufw route delete allow in on ${ovpn_iface_name} from ${ovpn_private_network}/${ovpn_private_network_mask}
+
+# restart UFW
+ufw disable && ufw enable
+

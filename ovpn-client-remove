@@ -1,0 +1,49 @@
+#!/bin/bash
+# This script adds client cert to revokation list
+
+# Specify client name as first argument
+ovpnclientname=$1
+
+# Check if client name is empty
+if [ -z "$ovpnclientname" ]; then
+  # print message and exit
+  echo "No client name specified!"
+  exit 1
+fi
+
+# include server configuration variables
+source ovpn-server-config
+
+# the variables below are set automatically
+ovpnconfigfile=/etc/openvpn/$ovpnservername.conf
+ovpnserverdir=/etc/openvpn/$ovpnservername
+
+
+# if our custom openvpn server configuration file does not exist
+if [ ! -f $ovpnconfigfile ]; then
+  # print message and exit
+  echo "OpenVPN server is NOT installed"
+  exit 1
+fi
+
+# save current directory for future use
+scriptdir=`pwd`
+
+# go to server CA directory to make new key for client
+cd $ovpnserverdir/ca
+
+# load default variables for CA certificates from "vars" file
+source ./vars
+
+# revoke client key
+echo "Revoking client key..."
+./revoke-full $ovpnclientname
+
+# remove client ccd file
+rm -f ${ovpnserverdir}/ccd/${ovpnclientname}
+
+# remove client fwd file
+rm -f ${ovpnserverdir}/fwd-${ovpnclientname}
+
+# Return to previous directory
+cd $scriptdir

@@ -1,0 +1,144 @@
+#!/bin/bash
+
+# include server configuration variables
+source ovpn-server-config
+
+# the variables below are set automatically
+ovpnconfigfile=/etc/openvpn/$ovpnservername.conf
+ovpnserverdir=/etc/openvpn/$ovpnservername
+# get default route interface name
+if [ -z "$default_iface_name" ]; then
+  default_iface_name=`ip route | grep default | cut -d" " -f5`
+fi
+# get server external ip address (if not set manually above)
+if [ -z "$ovpn_server_public_ip" ]; then
+  ovpn_server_public_ip=`ifconfig $default_iface_name | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p'`
+fi
+if [ -z "$ovpn_server_host" ]; then
+  ovpn_server_host=$ovpn_server_public_ip
+fi
+
+
+# if our custom openvpn server configuration file already exists
+if [ -f $ovpnconfigfile ]; then
+  # print message and exit
+  echo "OpenVPN server is already installed"
+  exit 1
+fi
+
+# save current directory for future use
+scriptdir=`pwd`
+
+echo "--------- STEP 1: Update repositories ------------------------"
+
+# -q stands for quiet and y for silent "yes" as default answer to all questions
+apt-get update -qy
+
+echo
+echo "--------- STEP 2: Install OpenVPN ----------------------------"
+
+# EasyRSA is a helper package for keys & certs generation
+apt-get install -qy openvpn easy-rsa
+
+echo
+echo "--------- STEP 3: Create CA (Certificate Authority) ----------"
+
+# copy the easy-rsa template directory into our server CA directory
+make-cadir $ovpnserverdir/ca
+
+cd $ovpnserverdir/ca
+
+# replace default KEY_NAME value in "vars" file to "pubipserver"
+sed -i -e "s/export KEY_NAME=\"EasyRSA\"/export KEY_NAME=\"${ovpnservername}\"/g" ./vars
+
+# load default variables for CA certificates from "vars" file
+source ./vars
+
+# clear configuration and start a new fresh one
+./clean-all
+
+# build root CA
+echo "Building root CA..."
+export EASY_RSA="${EASY_RSA:-.}"
+"$EASY_RSA/pkitool" --initca
+
+
+echo
+echo "--------- STEP 4: Create OpenVPN server keys ----------"
+
+# build server certificate
+echo "Building server certificate..."
+"$EASY_RSA/pkitool" --server $ovpnservername
+
+# Build Diffie-Hellman parameters for the server side
+# of an SSL/TLS connection.
+echo "Building DH key..."
+$OPENSSL dhparam -out ${KEY_DIR}/dh${KEY_SIZE}.pem ${KEY_SIZE}
+
+# generate an HMAC signature to strengthen 
+# the server's TLS integrity verification capabilities
+echo "Building HMAC signature..."
+openvpn --genkey --secret keys/ta.key
+
+# create OpenVPN clients config directory
+mkdir -p $ovpnserverdir/ccd
+
+echo
+echo "--------- STEP 5: Create OpenVPN server config ----------"
+
+# copy server config file template to /etc/openvpn
+cp -f $scriptdir/server.conf /etc/openvpn/${ovpnservername}.conf
+
+# replace variables in OpenVPN server config file
+sed -i -e "s#OVPNSERVERPORT#${ovpn_server_port}#g" $ovpnconfigfile
+sed -i -e "s#OVPNPRIVATENETADDR#${ovpn_private_network}#g" $ovpnconfigfile
+sed -i -e "s#OVPNPRIVATENETMASK#${ovpn_private_network_mask}#g" $ovpnconfigfile
+sed -i -e "s#OVPNSERVERNAME#${ovpnservername}#g" $ovpnconfigfile
+sed -i -e "s#OVPNSERVERDIR#${ovpnserverdir}#g" $ovpnconfigfile
+sed -i -e "s#OVPNIFACENAME#${ovpn_iface_name}#g" $ovpnconfigfile
+
+# copy client config file template to OpenVPN server dir
+cp -f $scriptdir/client-config /etc/openvpn/${ovpnservername}/
+
+# replace variables in OpenVPN client config file template
+sed -i -e "s#OVPNSERVERPORT#${ovpn_server_port}#g" /etc/openvpn/${ovpnservername}/client-config
+sed -i -e "s#OVPNSERVERHOST#${ovpn_server_host}#g" /etc/openvpn/${ovpnservername}/client-config
+
+# copy client script file to OpenVPN server dir
+cp -f $scriptdir/client-script.sh /etc/openvpn/${ovpnservername}/
+
+# replace variables in OpenVPN client script file
+sed -i -e "s#OVPNSERVERPUBLICIP#${ovpn_server_public_ip}#g" /etc/openvpn/${ovpnservername}/client-script.sh
+sed -i -e "s#OVPNIFACENAME#${ovpn_iface_name}#g" /etc/openvpn/${ovpnservername}/client-script.sh
+sed -i -e "s#DEFAULTIFACENAME#${default_iface_name}#g" /etc/openvpn/${ovpnservername}/client-script.sh
+sed -i -e "s#OVPNSERVERNAME#${ovpnservername}#g" /etc/openvpn/${ovpnservername}/client-script.sh
+
+
+echo
+echo "--------- STEP 6: Configure networking for OpenVPN server ----------"
+
+# Enable IPv4 forwarding in /etc/sysctl.conf
+sed -i '/^#.*net.ipv4.ip_forward=1/s/^#//' /etc/sysctl.conf
+# Enable IPv4 forwarding in /etc/ufw/sysctl.conf
+sed -i '/^#.*net.ipv4.ip_forward=1/s/^#//' /etc/ufw/sysctl.conf
+# Apply changes from /etc/sysctl.conf
+sysctl -p
+
+# allow incoming connections to OpenVPN
+ufw allow ${ovpn_server_port}/udp
+
+# allow traffic forwarding from OpenVPN clients network
+ufw route allow in on ${ovpn_iface_name} from ${ovpn_private_network}/${ovpn_private_network_mask}
+
+
+echo
+echo "--------- STEP 7: Enable & Start OpenVPN server ----------"
+
+# Enable & start OpenVPN server daemon
+systemctl start openvpn@${ovpnservername}
+systemctl enable openvpn@${ovpnservername}
+
+# Return to previous directory
+cd $scriptdir
+
+echo "Installation completed!"

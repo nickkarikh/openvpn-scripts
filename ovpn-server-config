@@ -1,0 +1,30 @@
+# specify OpenVPN server UDP port to listen on (default: 1194)
+ovpn_server_port=1194
+
+# specify OpenVPN server interface name (e.g.: tun0)
+ovpn_iface_name=pubip-ovpn
+
+# specify OpenVPN server private network (e.g.: 10.8.8.0)
+ovpn_private_network=10.8.8.0
+
+# specify OpenVPN server private network mask (e.g.: 255.255.255.0)
+ovpn_private_network_mask=255.255.255.0
+
+# specify OpenVPN server private IP address as gateway (e.g.: 10.8.8.1)
+ovpn_private_gw=10.8.8.1
+
+# specify OpenVPN server instance name (NOT domain name; e.g.: server1)
+ovpnservername=pubipserver
+
+# specify OpenVPN server hostname or public IP address for clients to use
+# (e.g. ovpn.mycompany.com or 1.2.3.4
+# or leave empty to auto-detect IP address)
+ovpn_server_host=
+
+# specify OpenVPN server public IP address for clients to use
+# (e.g. 1.2.3.4 or leave empty to auto-detect IP address)
+ovpn_server_public_ip=
+
+# specify default external interface name (e.g.: eth0, enp3s0, etc...)
+# or leave blank to auto-detect
+default_iface_name=

@@ -6,6 +6,8 @@ There are also port forwarding scripts which allow to map server ports to client
 in case if client doesn't have public IP address or don't want to expose itself completely.
 
 1. Copy archive (or all files) to somewhere on the server (like /opt/ovpn)
+   Add eXecute permissions on script files:
+   `chmod +x client-script.sh ovpn-client-add ovpn-client-remove ovpn-fwd-add ovpn-fwd-remove ovpn-server-install ovpn-server-uninstall`
 
 2. ATTENTION! Promote yourself to superuser:
    `sudo su -`

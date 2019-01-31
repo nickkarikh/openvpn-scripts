@@ -32,10 +32,10 @@ in case if client doesn't have public IP address or don't want to expose itself 
 7. Transfer client .ovpn file to the OpenVPN client machine. This file contains all the
    settings, keys and certificates neccessary to connect.
    In case of Linux:
-   a. Install OpenVPN: `sudo apt install openvpn`
-   b. rename .ovpn file to .conf file (e.g.: client1.conf) and place in /etc/openvpn
-   c. `sudo systemctl enable openvpn@client1 && sudo systemctl start openvpn@client1`
-   d. you should now be connected and your default gateway should be changed to this VPN
+   1. Install OpenVPN: `sudo apt install openvpn`
+   2. rename .ovpn file to .conf file (e.g.: client1.conf) and place in /etc/openvpn
+   3. `sudo systemctl enable openvpn@client1 && sudo systemctl start openvpn@client1`
+   4. you should now be connected and your default gateway should be changed to this VPN
 
 8. To add port forwarding, run:
   `./ovpn-fwd-add client1 2222 22 tcp`
